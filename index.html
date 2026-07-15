@@ -148,6 +148,21 @@
   footer a{color:var(--accent-2);text-decoration:none}
   .badge{display:inline-block;margin-top:6px;font-size:10.5px;color:#8c8178;background:rgba(255,255,255,.04);padding:3px 9px;border-radius:20px}
 
+  /* ===== Ficha nutricional (estilo YAZIO) ===== */
+  .food-info{margin-top:12px;border:1px solid var(--line);border-radius:12px;background:rgba(20,17,15,.55);padding:12px 13px}
+  .fi-cat{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;padding:5px 11px;border-radius:20px;color:#fff;box-shadow:0 4px 14px -6px rgba(0,0,0,.7)}
+  .fi-cat .fi-dot{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.9)}
+  .fi-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .fi-tag{font-size:11.5px;font-weight:500;color:var(--txt);background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.09);padding:4px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:5px}
+  .fi-tag::before{content:"";width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.35)}
+  .fi-tag--good{color:#8bf0b4;background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.40)}
+  .fi-tag--good::before{background:#4ade80}
+  .fi-tag--bad{color:#ff9d9d;background:rgba(255,86,86,.12);border-color:rgba(255,86,86,.42)}
+  .fi-tag--bad::before{background:#ff5656}
+  .fi-tag--warn{color:#f4c56a;background:rgba(224,145,47,.13);border-color:rgba(224,145,47,.42)}
+  .fi-tag--warn::before{background:#e0912f}
+  .fi-note{font-size:12px;color:var(--txt-dim);margin-top:10px;line-height:1.45}
+
   @media (max-width:480px){
     body{padding:18px 12px 50px}
     .macro .mval{font-size:18px}
@@ -221,6 +236,11 @@
         <span class="unit">g</span>
         <button type="button" id="plus" aria-label="Sumar 5 gramos">+</button>
       </div>
+      <div class="food-info" id="srcInfo" style="display:none">
+        <span class="fi-cat"><span class="fi-dot"></span><span class="fi-cat-text"></span></span>
+        <div class="fi-tags"></div>
+        <div class="fi-note"></div>
+      </div>
     </div>
   </section>
 
@@ -249,6 +269,11 @@
       <div class="macro peso"><div class="mlabel">Peso (gr.)</div><div class="mval" id="eqW">0</div></div>
     </div>
     <div class="placeholder-note" id="eqNote">Elige primero una ración original.</div>
+    <div class="food-info" id="eqInfo" style="display:none">
+      <span class="fi-cat"><span class="fi-dot"></span><span class="fi-cat-text"></span></span>
+      <div class="fi-tags"></div>
+      <div class="fi-note"></div>
+    </div>
   </section>
 
   <footer>
@@ -284,6 +309,127 @@ const clampW   = x => { x = x>1000 ? 1000 : x; return x<0?0:x; };
 const macroPattern = f => (f.h>0?'H':'') + (f.p>0?'P':'') + (f.g>0?'G':''); // qué macros presenta
 
 const fmt = v => Number.isInteger(v) ? String(v) : String(v);
+
+/* ========================================================================
+   FICHA NUTRICIONAL (estilo YAZIO)
+   Categoría (HIDRATOS / PROTEÍNAS / GRASAS) + destacados "rico en..."
+   derivados del patrón de macros (raciones) y del nombre del alimento.
+   ======================================================================== */
+const CAT_STYLE = {
+  H:{label:'Hidratos',  color:'#e0912f'},   // ámbar
+  P:{label:'Proteínas', color:'#e11d2a'},   // rojo AURA
+  G:{label:'Grasas',    color:'#e0b431'}    // dorado
+};
+const CAT_NOTE = {
+  H:'Tu principal fuente de energía para entrenar.',
+  P:'Ideal para construir y mantener tu masa muscular.',
+  G:'Energía concentrada y saciante; tómalo con moderación.',
+  L:'Muy ligero: puedes tomarlo con bastante libertad.'
+};
+const _norm = s => (s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,'');
+
+/* ---- Diccionarios por el NOMBRE del alimento ---- */
+const COMPLEX=/(integral|wholegrain|whole grain|wholemeal|avena|\boats?\b|centeno|espelta|quinoa|sarracen|\bmijo\b|bulgur|\bcebada\b|salvado|\bbran\b|arroz integral|brown rice|pasta integral|legumbr|lenteja|\blentil|garbanzo|chickpea|alubia|\bjudia\b|judias|frijol|frejol|poroto|\bhaba\b|habas|\bsoja\b|edamame|hummus|altramuz|altramuces|\bazuki\b|patata|\bpapa\b|papas|boniato|batata|\byuca\b|tapioca)/;
+const VEG=/(lechuga|tomate|pepino|cebolla|pimiento|calabacin|calabaza|berenjena|brocoli|coliflor|espinac|acelga|rucula|canonigo|zanahoria|esparrag|alcachofa|\bapio\b|puerro|champiñon|champinon|\bseta\b|setas|rabano|remolacha|\bcol\b|coles|repollo|lombarda|endibia|escarola|guisante|pepinillo|gazpacho|salmorejo|menestra|ensalada|verdura|hortaliza|chucrut|\bnabo\b|\bkale\b|berza|\bgrelo\b|borraja|\bcardo\b|alcaparra|\balga\b|\bnori\b|judia verde|judias verdes|calçot|calcot)/;
+const FRUIT=/(\bmanzana\b|\bpera\b|peras|platano|banana|naranja|mandarina|fresa|freson|\bkiwi\b|\buva\b|uvas|\bmelon\b|sandia|melocoton|nectarina|albaricoque|ciruela|cereza|\bhigo\b|\bmango\b|papaya|\bpiña\b|\bpina\b|granada|arandano|frambuesa|\bmora\b|moras|grosella|\bcaqui\b|chirimoya|pomelo|\blima\b|\blimon\b|frutos rojos|macedonia|\bfruta\b|\bacai\b|maracuya|\bcoco\b)/;
+const REFINED=/(\barroz\b|basmati|\bpasta\b|macarron|espagueti|spaghetti|penne|\bfideo|noodle|cuscus|cous cous|couscous|semola|\bpan\b|pan de|molde|baguette|\bbagel\b|chapata|tortilla de trigo|\bwrap\b|piadina|\bpita\b|\bpicos\b|colin|regaña|regana|tostada|biscote|cereales|corn flakes|cornflakes|tortita|arepa|polenta|harina|\bmasa\b|\bnacho|totopo|\bpizza\b)/;
+const SUGAR=/(azucar|azucarad|\bdulce|chocolate|\bchoco\b|\bcacao\b|galleta|bolleria|\bbollo|croissant|napolitana|ensaimada|palmera|donut|\bdona\b|magdalena|bizcocho|\btarta|pastel|mermelada|confitura|\bmiel\b|sirope|jarabe|caramelo|chuche|golosina|gomin|turron|mazapan|\bflan\b|natilla|pudding|\bpudin|mousse|helado|granizado|sorbete|dulce de leche|membrillo|nutella|nocilla|nesquik|cola cao|colacao|almibar|melaza|toffee|\bnube\b|conguito|lacasito|kinder|filipinos|\bprincipe\b|\boreo\b|dinosaurus|bollycao|phoskito|krispies|frosties|chocapic|\bsmacks\b|miel pops|granola|choco krispies|estrellitas)/;
+const TRANS=/(hojaldre|empanad|rollito|\bfrito\b|\bfrita\b|fritos|fritas|rebozad|nugget|precocinad|palmera|margarina|\bsnack|patatas fritas|patata frita|\bchips\b|palomita|\bgofre\b|waffle|churro|buñuelo|bunuelo|croqueta|briwat|samosa|tempura)/;
+const HEALTHYFAT=/(aceite de oliva|\boliva\b|aguacate|avocado|\bnuez\b|nueces|almendra|avellana|anacardo|pistacho|cacahuete|tahini|\bsemilla|chia|\blino\b|aceituna|\bpipa\b|pipas|crema de cacahuete|crema de almendra)/;
+const OMEGA=/(salmon|\batun\b|sardina|caballa|boqueron|\btrucha\b|arenque|anchoa|\bverdel\b|\bmelva\b|\bbonito\b|\bjurel\b)/;
+const BADFAT=/(aceite de girasol|aceite de palma|grasa de palma|palmiste|hidrogenad|\bmanteca\b|mantequilla|\bnata\b|\bsebo\b)/;
+const PROT=/(pollo|pavo|pechuga|\bclara|\bhuevo|huevos|merluza|bacalao|\blomo\b|ternera|solomillo|\bgamba|langostino|marisco|\bpulpo\b|calamar|sepia|mejillon|berberecho|almeja|\brape\b|lenguado|\bgallo\b|lubina|dorada|proteina|\bwhey\b|caseina|seitan|\btofu\b|tempeh|requeson|queso fresco|queso batido|\bskyr\b)/;
+const FIAMBRE=/(jamon york|jamon cocido|fiambre|pechuga de pavo cocid|pavo cocido|jamon de pavo)/;
+const PROCESSED=/(chorizo|salchichon|\bsalami\b|mortadela|\bchoped\b|chopped|\bfuet\b|longaniza|salchich|\bbacon\b|beicon|panceta|\btocino\b|morcilla|sobrasada|butifarra|frankfurt|chistorra|cecina|\blacon\b|jamon serrano|jamon iberico|\bpate\b|salchichas|embuchado|pepperoni|peperoni|caña de lomo|cana de lomo|lomo curado)/;
+const CALCIO=/(\bleche\b|yogur|\bqueso|requeson|kefir)/;
+const SATIA=/(avena|patata|boniato|batata|legumbr|lenteja|garbanzo|alubia|\bhuevo|verdura|ensalada|brocoli|espinac|\bmanzana\b|integral|quinoa|pollo|pavo|\batun\b|requeson|proteina)/;
+const LOWSATIA=/(refresco|\bzumo\b|nectar|gaseosa|golosina|caramelo|alcohol|cerveza|\bvino\b|licor|sirope|jarabe)/;
+const SWEET_OK=/(sin azucar|0%|zero|\blight\b|edulcorad|\bproteina|\bprotein\b|\bwhey\b|high protein)/;
+
+function foodInfo(f){
+  const n=_norm(f.n);
+  const v={H:f.h||0,P:f.p||0,G:f.g||0};
+  const present=['H','P','G'].filter(k=>v[k]>0);
+  const max=Math.max(v.H,v.P,v.G);
+  const dom=present.filter(k=>v[k]===max);
+  let catLabel,catColor,noteKey;
+  if(!present.length){ catLabel='Libre'; catColor='#6b7280'; noteKey='L'; }
+  else { catLabel=dom.map(k=>CAT_STYLE[k].label).join(' + '); catColor=CAT_STYLE[dom[0]].color; noteKey=dom[0]; }
+
+  const list=[]; const add=(l,k)=>list.push({label:l,kind:k});
+  const sweetOk=SWEET_OK.test(n);
+  const sugar=SUGAR.test(n)&&!sweetOk;
+  const trans=TRANS.test(n);
+  const processed=sugar||trans;                 // ultraprocesado: no "greenwashear"
+  const badOil=/(aceite de girasol|aceite de palma|grasa de palma|palmiste|hidrogenad)/.test(n);
+  const complex=COMPLEX.test(n);
+  const veg=VEG.test(n);
+  const isOil=/\baceite\b/.test(n);
+  const fruitFresh=FRUIT.test(n)&&!/(zumo|nectar|deshidratad|almibar|\bpasa\b|pasas|datil|orejon|confitad)/.test(n)&&!isOil&&!/(leche|bebida|crema) de coco/.test(n);
+  const refined=REFINED.test(n);
+  const procMeat=PROCESSED.test(n);
+  const fiambre=FIAMBRE.test(n);
+  const hidDom=v.H>0&&v.H===max;
+  const pDom=v.P>0&&v.P===max;
+
+  if(!present.length){ add('Muy bajo en calorías','good'); }
+  else{
+    if(dom.includes('P')) add('Rico en proteínas','good');
+    if(dom.includes('G')) add('Rico en grasas','neutral');
+    if(hidDom){
+      if(complex&&!processed) add('Hidratos complejos','good');
+      else if(refined&&!processed) add('Hidratos refinados','warn');
+      else if(!veg&&!fruitFresh&&!processed) add('Fuente de hidratos','neutral');
+    }
+  }
+  // A vigilar (rojo)
+  if(sugar) add('Azúcar añadido','bad');
+  if(trans) add('Grasas trans','bad');
+  if(procMeat) add('Carne procesada','bad');
+  const healthyFat=HEALTHYFAT.test(n)&&!badOil;   // p.ej. mantequilla de cacahuete = saludable
+  if(!trans&&!procMeat&&!healthyFat&&BADFAT.test(n)) add('Grasas poco saludables','bad');
+  if(LOWSATIA.test(n)) add('Poco saciante','bad');
+  // Ámbar
+  if(fiambre&&!procMeat) add('Fiambre procesado','warn');
+  // Positivo (verde) — suprimido si ultraprocesado
+  if(!processed&&(complex||veg||fruitFresh)) add('Rico en fibra','good');
+  if(healthyFat) add('Grasas saludables','good');
+  if(OMEGA.test(n)) add('Omega-3','good');
+  if(PROT.test(n)&&!procMeat&&!fiambre){
+    if(v.G===0&&pDom) add('Proteína magra','good');
+    else add('Proteína de calidad','good');
+  }
+  if(CALCIO.test(n)) add('Fuente de calcio','good');
+  if(!processed&&!procMeat&&SATIA.test(n)) add('Saciante','good');
+
+  const seen=new Set(),uniq=[]; list.forEach(t=>{ if(!seen.has(t.label)){ seen.add(t.label); uniq.push(t); } });
+  const bad =uniq.filter(t=>t.kind==='bad');
+  const warn=uniq.filter(t=>t.kind==='warn');
+  const good=uniq.filter(t=>t.kind==='good');
+  const neut=uniq.filter(t=>t.kind==='neutral');
+  const tags=[...bad,...warn,...good,...neut].slice(0,4);
+  return { catLabel, catColor, tags, note:CAT_NOTE[noteKey] };
+}
+
+function renderFoodInfo(f, boxId){
+  const box=document.getElementById(boxId);
+  if(!box) return;
+  if(!f){ box.style.display='none'; return; }
+  const info=foodInfo(f);
+  box.querySelector('.fi-cat').style.background=info.catColor;
+  box.querySelector('.fi-cat-text').textContent='Categoría: '+info.catLabel;
+  const tagsEl=box.querySelector('.fi-tags');
+  tagsEl.innerHTML='';
+  info.tags.forEach(t=>{
+    const cls=t.kind==='good'?' fi-tag--good':t.kind==='bad'?' fi-tag--bad':t.kind==='warn'?' fi-tag--warn':'';
+    const s=document.createElement('span');
+    s.className='fi-tag'+cls;
+    s.textContent=t.label;
+    tagsEl.appendChild(s);
+  });
+  box.querySelector('.fi-note').textContent=info.note;
+  box.style.display='block';
+}
 
 /* ---------- estado ---------- */
 const state = {
@@ -378,6 +524,7 @@ function recomputeSource(){
   document.getElementById('srcH').textContent = f.h>0 ? fmt(roundHalf(state.rawH)) : '0';
   document.getElementById('srcP').textContent = f.p>0 ? fmt(roundHalf(state.rawP)) : '0';
   document.getElementById('srcG').textContent = f.g>0 ? fmt(roundHalf(state.rawG)) : '0';
+  renderFoodInfo(f,'srcInfo');          // ficha nutricional del origen
   if(state.equiv) computeEquivalent();  // recalcula si ya hay equivalente
 }
 
@@ -422,10 +569,12 @@ function computeEquivalent(){
   document.getElementById('eqG').textContent = s.g>0 ? fmt(roundHalf(state.rawG)) : '0';
   document.getElementById('eqW').textContent = peso;
   document.getElementById('eqNote').style.display='none';
+  renderFoodInfo(e,'eqInfo');           // ficha nutricional del equivalente
 }
 
 function renderEquivEmpty(){
   ['eqH','eqP','eqG','eqW'].forEach(id=>document.getElementById(id).textContent='0');
+  renderFoodInfo(null,'eqInfo');
   const note=document.getElementById('eqNote');
   note.style.display='block';
   note.textContent = state.source
