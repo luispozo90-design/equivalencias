@@ -395,12 +395,10 @@ function foodInfo(f){
   if(!processed&&(complex||veg||fruitFresh)) add('Rico en fibra','good');
   if(healthyFat) add('Grasas saludables','good');
   if(OMEGA.test(n)) add('Omega-3','good');
-  if(PROT.test(n)&&!procMeat&&!fiambre){
-    if(v.G===0&&pDom) add('Proteína magra','good');
-    else add('Proteína de calidad','good');
-  }
+  const fattyCut=/(alitas|\bala\b|\balas\b|muslo|contramuslo|costilla|carrillera|\brabo\b|entraña|secreto|panceta)/.test(n);
+  const breadish=refined||/(barrita|barritas|\bpan\b|tostad|galleta|tortita|cereal|\bsnack)/.test(n);
+  if(PROT.test(n)&&!procMeat&&!fiambre&&!processed&&!breadish&&!fattyCut) add('Proteína de calidad','good');
   if(CALCIO.test(n)) add('Fuente de calcio','good');
-  if(!processed&&!procMeat&&SATIA.test(n)) add('Saciante','good');
 
   const seen=new Set(),uniq=[]; list.forEach(t=>{ if(!seen.has(t.label)){ seen.add(t.label); uniq.push(t); } });
   const bad =uniq.filter(t=>t.kind==='bad');
