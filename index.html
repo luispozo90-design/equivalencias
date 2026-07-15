@@ -345,6 +345,7 @@ const CALCIO=/(\bleche\b|yogur|\bqueso|requeson|kefir)/;
 const SATIA=/(avena|patata|boniato|batata|legumbr|lenteja|garbanzo|alubia|\bhuevo|verdura|ensalada|brocoli|espinac|\bmanzana\b|integral|quinoa|pollo|pavo|\batun\b|requeson|proteina)/;
 const LOWSATIA=/(refresco|\bzumo\b|nectar|gaseosa|golosina|caramelo|alcohol|cerveza|\bvino\b|licor|sirope|jarabe)/;
 const SWEET_OK=/(sin azucar|0%|zero|\blight\b|edulcorad|\bproteina|\bprotein\b|\bwhey\b|high protein)/;
+const ULTRA=/(refresco|\bcola\b|gaseosa|bolleria|\bbollo|galleta|donut|croissant|napolitana|ensaimada|palmera|magdalena|golosina|chuche|gomin|\bsnack|patatas fritas|\bchips\b|nugget|precocinad|empanadilla|frankfurt|salchich|pan de molde|palitos|sustitutivo|herbalife|nutella|nocilla|nesquik|cola cao|colacao|crema de cacao|margarina|helado|natilla|\bflan\b|postre lacteo|\bmousse|gofre|waffle|churro|choco krispies|frosties|chocapic|\bsmacks\b|\bpizza\b|tortellini|raviolis|barrita)/;
 
 function foodInfo(f){
   const n=_norm(f.n);
@@ -386,6 +387,7 @@ function foodInfo(f){
   if(sugar) add('Azúcar añadido','bad');
   if(trans) add('Grasas trans','bad');
   if(procMeat) add('Carne procesada','bad');
+  if(ULTRA.test(n)) add('Ultraprocesado','bad');
   const healthyFat=HEALTHYFAT.test(n)&&!badOil;   // p.ej. mantequilla de cacahuete = saludable
   if(!trans&&!procMeat&&!healthyFat&&BADFAT.test(n)) add('Grasas poco saludables','bad');
   if(LOWSATIA.test(n)) add('Poco saciante','bad');
