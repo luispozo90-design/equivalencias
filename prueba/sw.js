@@ -1,7 +1,7 @@
 /* AURA · Equivalencias — funciona sin conexión.
    La página se busca siempre primero en internet (así las actualizaciones llegan solas)
    y, si no hay cobertura, se usa la copia guardada. Los datos de Supabase nunca se guardan aquí. */
-const VERSION = 'aura-v4';
+const VERSION = 'aura-v5';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
