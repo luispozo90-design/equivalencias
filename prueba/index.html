@@ -204,9 +204,21 @@
   .cli-meta{font-size:11.5px;color:var(--txt-faint);margin-top:2px}
   .cli-meta .on{color:#067647;font-weight:600}
   .cli-act{display:flex;gap:6px}
-  .cli-act button{border:1px solid #e4e7ec;background:#fff;border-radius:10px;width:38px;height:38px;font-size:16px;cursor:pointer}
+  .cli-act button{border:1px solid #e4e7ec;background:#fff;border-radius:10px;width:36px;height:36px;font-size:15px;cursor:pointer;padding:0}
   .cli-act button:active{background:var(--accent-soft)}
   .a-count{font-size:12px;color:var(--txt-faint);font-weight:600}
+  .dlg{position:fixed;inset:0;z-index:300;background:rgba(15,16,24,.45);display:flex;align-items:flex-end;justify-content:center;padding:12px;animation:pkFade .15s ease-out}
+  .dlg[hidden]{display:none!important}
+  @media (min-width:600px){ .dlg{align-items:center} }
+  .dlg-box{width:100%;max-width:420px;background:#fff;border-radius:20px;padding:20px 18px calc(16px + env(safe-area-inset-bottom));box-shadow:0 30px 70px -20px rgba(0,0,0,.5);animation:pkUp .18s ease-out}
+  .dlg-box h3{margin:0 0 8px;font-size:17px}
+  .dlg-txt{font-size:14.5px;color:var(--txt-dim);line-height:1.5}
+  .dlg-btns{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+  .dlg-btns .a-btn{margin-top:0}
+  .a-btn.danger{background:#d92d20}
+  .a-btn.plain{background:#f2f3f7;color:var(--txt)}
+  .dlg .a-cred{background:#ecfdf3;border:1px solid #abefc6;border-radius:12px;padding:10px 12px;margin-top:4px}
+  .dlg textarea{width:100%;height:120px;margin-top:10px;border:1px solid #e4e7ec;border-radius:10px;padding:10px;font-family:inherit;font-size:13px}
 </style>
 </head>
 <body>
@@ -247,6 +259,8 @@
 <!-- Panel de altas (solo administrador) -->
 <button id="adminBtn" class="admin-btn" type="button">⚙︎ Clientes</button>
 <div class="offline-pill" id="offlinePill">Sin conexión · usando alimentos guardados</div>
+<div class="dlg" id="dlg" hidden><div class="dlg-box" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+  <h3 id="dlgTitle"></h3><div id="dlgBody"></div><div class="dlg-btns" id="dlgBtns"></div></div></div>
 <div class="admin" id="admin" hidden>
   <div class="admin-top"><h2>Panel de clientes</h2><button type="button" class="picker-close" id="adminClose">Cerrar</button></div>
   <div class="admin-wrap">
@@ -260,14 +274,6 @@
         <button class="a-btn" id="altaBtn" type="submit">Crear cuenta</button>
         <div class="a-err" id="altaErr"></div>
       </form>
-      <div class="a-ok" id="altaOk" hidden>
-        <h4 id="altaOkTitle">✅ Cuenta creada</h4>
-        <div class="a-cred" id="altaCred"></div>
-        <div class="a-row2">
-          <button type="button" class="a-btn wa" id="altaWa">Enviar por WhatsApp</button>
-          <button type="button" class="a-btn ghost" id="altaCopy">Copiar mensaje</button>
-        </div>
-      </div>
     </section>
     <section class="card">
       <div class="card-label" style="justify-content:space-between"><span><span class="dot" style="display:inline-block;margin-right:8px"></span>Clientes</span><span class="a-count" id="cliCount"></span></div>
@@ -546,14 +552,38 @@ function eqWeight(e){
   return peso;
 }
 function equivOptions(){ return state.source ? RATIONS.filter(f => macroPattern(f)===macroPattern(state.source) && f!==state.source) : []; }
+/* Sinónimos (España / Latinoamérica): son el MISMO alimento, no un cambio */
+const SINONIMOS={papa:'patata',papas:'patata',patatas:'patata',batata:'boniato',batatas:'boniato',camote:'boniato',boniatos:'boniato',
+  palta:'aguacate',aguacates:'aguacate',banana:'platano',banano:'platano',platanos:'platano',durazno:'melocoton',frutilla:'fresa',fresas:'fresa',fresones:'fresa',freson:'fresa',
+  mani:'cacahuete',cacahuate:'cacahuete',cacahuetes:'cacahuete',arveja:'guisante',arvejas:'guisante',guisantes:'guisante',chicharo:'guisante',
+  choclo:'maiz',elote:'maiz',frijol:'alubia',frijoles:'alubia',poroto:'alubia',porotos:'alubia',habichuela:'alubia',habichuelas:'alubia',judia:'alubia',judias:'alubia',alubias:'alubia',
+  jugo:'zumo',toronja:'pomelo',anana:'pina',ananas:'pina',zucchini:'calabacin',calabacita:'calabacin',lentejas:'lenteja',garbanzos:'garbanzo',
+  nueces:'nuez',almendras:'almendra',huevos:'huevo',claras:'clara',tortitas:'tortita',copos:'avena',yogures:'yogur',yogurt:'yogur'};
+const IGNORAR=/^(\d+|un|una|el|la|los|las|de|del|vasito|filete|filetes|lata|bote|harina)$/;
+function alimentoBase(f){
+  if(!f) return '';
+  const n=_norm(f.n).replace(/[^a-z0-9ñ ]/g,' ').trim();
+  if(/^judias? verdes?\b/.test(n)) return 'judia verde';
+  const w=n.split(/\s+/).find(x=>x && !IGNORAR.test(x)) || n;
+  return SINONIMOS[w]||w;
+}
+const GENERICAS=/^(de|del|la|el|los|las|en|con|y|sin|al|a|para|tipo|estilo|seco|seca|secos|secas|cocido|cocida|cocidos|cocidas|crudo|cruda|natural|naturales|entero|entera|fresco|fresca|integral|integrales|light|desnatado|desnatada|semidesnatado|hacendado|mercadona|carrefour|lidl|dia|eroski|vasito|lata|bote|congelado|congelada|plancha|horno|asado|asada|hervido|hervida|casero|casera|clasico|clasica|original|extra|virgen|bio|eco|ecologico|ecologica|zero|sabor|g|gr|kg|ml|vivo)$/;
+function clave(f){ return palabrasBase(f).filter(w=>w.length>1 && !/^\d+%?$/.test(w) && !GENERICAS.test(w)); }
+function palabrasBase(f){ return _norm(f.n).replace(/[^a-z0-9ñ ]/g,' ').split(/\s+/).filter(Boolean).map(w=>SINONIMOS[w]||w); }
 function renderSuggestions(){
   const box=document.getElementById('sugBox'); if(!box) return;
   if(!state.source || !RATIONS.length){ box.hidden=true; return; }
   const opts=equivOptions().filter(f=>eqWeight(f)>0);
   if(!opts.length){ box.hidden=true; return; }
   const sorted=opts.slice().sort((a,b)=> sugScore(b)-sugScore(a) || a.n.length-b.n.length || a.n.localeCompare(b.n,'es'));
-  const top=[], seen=new Set();
-  for(const f of sorted){ const k=_norm(f.n).split(/\s+/)[0]; if(seen.has(k)) continue; seen.add(k); top.push(f); if(top.length===5) break; }
+  const srcVeg=VEG.test(_norm(state.source.n));
+  const usadas=new Set(clave(state.source));               // palabras del alimento original (patata=papa, pollo…)
+  const top=[];
+  for(const f of sorted){
+    const w=clave(f); if(!w.length || w.some(x=>usadas.has(x))) continue;   // mismo alimento o ya propuesto
+    if(!srcVeg && VEG.test(_norm(f.n))) continue;                           // no proponer verduras para un hidrato/proteína
+    w.forEach(x=>usadas.add(x)); top.push(f); if(top.length===5) break;
+  }
   document.getElementById('sugTitle').textContent = state.equiv ? 'Otras opciones' : 'Ideas para cambiarlo';
   const list=document.getElementById('sugList'); list.innerHTML='';
   top.forEach(f=>{
@@ -879,12 +909,41 @@ const Admin=(()=>{
   const first=n=>(n||'').trim().split(/\s+/)[0]||'';
   const msg=(nombre,email,pass,isNew)=>(isNew?`¡Hola ${first(nombre)}! 👋\nYa tienes acceso a la app de equivalencias de AURA 💪`:`¡Hola ${first(nombre)}! 👋\nTe dejo tu nueva contraseña de la app de equivalencias de AURA 💪`)+
      `\n\n🌐 Web: ${APP_URL}\n📧 Email: ${email}\n🔑 Contraseña: ${pass}\n\n📲 Truco: ábrela en el móvil y dale a Compartir → «Añadir a pantalla de inicio» para tenerla como una app.`;
+  /* ---- Ventanas propias de la app (no dependen del navegador) ---- */
+  const dlg=$('dlg');
+  function openDlg(title, bodyNode, buttons){
+    return new Promise(resolve=>{
+      $('dlgTitle').textContent=title; const B=$('dlgBody'); B.innerHTML=''; if(bodyNode) B.append(bodyNode);
+      const W=$('dlgBtns'); W.innerHTML='';
+      buttons.forEach(bt=>{ const b=document.createElement('button'); b.type='button'; b.className='a-btn '+(bt.cls||''); b.textContent=bt.label;
+        b.addEventListener('click',()=>{ const v=bt.onClick?bt.onClick(b):bt.value; if(v===undefined) return; dlg.hidden=true; resolve(v); }); W.append(b); });
+      dlg.hidden=false;
+      dlg.onclick=e=>{ if(e.target===dlg){ dlg.hidden=true; resolve(null); } };
+    });
+  }
+  const txt=t=>{ const d=document.createElement('div'); d.className='dlg-txt'; d.textContent=t; return d; };
+  const uiConfirm=(title,text,ok,danger)=>openDlg(title, txt(text), [{label:ok,cls:danger?'danger':'',value:true},{label:'Cancelar',cls:'plain',value:false}]);
+  const uiAlert=(title,text)=>openDlg(title, txt(text), [{label:'Vale',value:true}]);
+  function uiPrompt(title,label,value,ok){
+    const wrap=document.createElement('div'); const l=document.createElement('label'); l.className='a-label'; l.textContent=label;
+    const i=document.createElement('input'); i.className='a-input'; i.type='text'; i.value=value||''; i.autocomplete='off'; i.setAttribute('data-lpignore','true'); i.setAttribute('data-1p-ignore','');
+    wrap.append(l,i); setTimeout(()=>{ i.focus(); i.select(); },60);
+    return openDlg(title, wrap, [{label:ok,onClick:()=>i.value.trim().replace(/\s+/g,' ')||undefined},{label:'Cancelar',cls:'plain',value:null}]);
+  }
   function showResult(nombre,email,pass,isNew){
     last={text:msg(nombre,email,pass,isNew)};
-    $('altaOkTitle').textContent = isNew ? '✅ Cuenta creada' : '🔑 Contraseña nueva';
-    $('altaCred').innerHTML='';
-    [['👤 ',nombre],['📧 ',email],['🔑 ',pass]].forEach(([k,v],i)=>{ const d=document.createElement('div'); d.append(k); if(i===2){ const c=document.createElement('code'); c.textContent=v; d.append(c);} else d.append(v); $('altaCred').append(d); });
-    $('altaOk').hidden=false; $('altaOk').scrollIntoView({behavior:'smooth',block:'center'});
+    const body=document.createElement('div'); const cred=document.createElement('div'); cred.className='a-cred';
+    [['👤 ',nombre],['📧 ',email],['🔑 ',pass]].forEach(([k,v],i)=>{ const d=document.createElement('div'); d.append(k); if(i===2){ const c=document.createElement('code'); c.textContent=v; d.append(c);} else d.append(v); cred.append(d); });
+    body.append(txt(isNew?'Ya puede entrar. Mándale sus datos:':'La contraseña anterior ya no sirve. Mándale la nueva:'), cred);
+    openDlg(isNew?'✅ Cuenta creada':'🔑 Contraseña nueva', body, [
+      {label:'Enviar por WhatsApp', cls:'wa', onClick:()=>{ window.open('https://wa.me/?text='+encodeURIComponent(last.text),'_blank'); return undefined; }},
+      {label:'Copiar mensaje', cls:'ghost', onClick:(b)=>{ copyMsg(b, body); return undefined; }},
+      {label:'Cerrar', cls:'plain', value:true}
+    ]);
+  }
+  async function copyMsg(b, body){
+    try{ await navigator.clipboard.writeText(last.text); b.textContent='¡Copiado! ✓'; setTimeout(()=>b.textContent='Copiar mensaje',1600); }
+    catch(e){ if(!body.querySelector('textarea')){ const t=document.createElement('textarea'); t.value=last.text; body.append(t); t.select(); } b.textContent='Mantén pulsado el texto para copiarlo'; }
   }
   async function load(){
     $('cliList').innerHTML='<div class="pk-spin"></div>';
@@ -903,22 +962,29 @@ const Admin=(()=>{
     if(!res.length){ L.innerHTML='<div class="pk-empty">'+(clients.length?'Nadie coincide con la búsqueda.':'Aún no hay clientes.')+'</div>'; return; }
     res.forEach(c=>{
       const row=document.createElement('div'); row.className='cli';
-      row.innerHTML='<div class="cli-txt"><div class="cli-name"></div><div class="cli-mail"></div><div class="cli-meta"></div></div><div class="cli-act"><button type="button" title="Nueva contraseña" aria-label="Nueva contraseña">🔑</button><button type="button" title="Dar de baja" aria-label="Dar de baja">🗑</button></div>';
+      row.innerHTML='<div class="cli-txt"><div class="cli-name"></div><div class="cli-mail"></div><div class="cli-meta"></div></div><div class="cli-act"><button type="button" title="Editar nombre" aria-label="Editar nombre">✏️</button><button type="button" title="Nueva contraseña" aria-label="Nueva contraseña">🔑</button><button type="button" title="Dar de baja" aria-label="Dar de baja">🗑</button></div>';
       row.querySelector('.cli-name').textContent=c.nombre||'(sin nombre)';
       row.querySelector('.cli-mail').textContent=c.email;
       const meta=row.querySelector('.cli-meta'); meta.textContent='Alta '+fmt(c.alta)+' · ';
       const s=document.createElement('span'); s.textContent=ago(c.ultimo_acceso); if(c.ultimo_acceso && (Date.now()-new Date(c.ultimo_acceso))<7*864e5) s.className='on'; meta.append(s);
-      const [bPass,bDel]=row.querySelectorAll('button');
+      const [bName,bPass,bDel]=row.querySelectorAll('button');
+      bName.addEventListener('click', async ()=>{
+        const nuevo=await uiPrompt('✏️ Editar nombre','Nombre y apellidos', c.nombre||'', 'Guardar');
+        if(!nuevo || nuevo===c.nombre) return;
+        const {error}=await sb.rpc('aura_admin_cambiar_nombre',{p_email:c.email,p_nombre:nuevo});
+        if(error){ uiAlert('No se pudo guardar', nice(error)); return; }
+        c.nombre=nuevo; render();
+      });
       bPass.addEventListener('click', async ()=>{
-        if(!confirm('¿Generar una contraseña nueva para '+(c.nombre||c.email)+'? La antigua dejará de funcionar.')) return;
+        if(!await uiConfirm('🔑 Contraseña nueva','¿Generar una contraseña nueva para '+(c.nombre||c.email)+'? La antigua dejará de funcionar.','Generar contraseña')) return;
         const p=genPass(); const {error}=await sb.rpc('aura_admin_nueva_password',{p_email:c.email,p_password:p});
-        if(error){ alert(nice(error)); return; }
-        window.scrollTo(0,0); panel.scrollTop=0; showResult(c.nombre||'',c.email,p,false);
+        if(error){ uiAlert('No se pudo cambiar', nice(error)); return; }
+        showResult(c.nombre||'',c.email,p,false);
       });
       bDel.addEventListener('click', async ()=>{
-        if(!confirm('¿Dar de baja a '+(c.nombre||c.email)+'? Ya no podrá entrar en la app.')) return;
+        if(!await uiConfirm('🗑 Dar de baja','¿Dar de baja a '+(c.nombre||c.email)+'? Ya no podrá entrar en la app.','Dar de baja',true)) return;
         const {error}=await sb.rpc('aura_admin_borrar_cliente',{p_email:c.email});
-        if(error){ alert(nice(error)); return; }
+        if(error){ uiAlert('No se pudo dar de baja', nice(error)); return; }
         clients=clients.filter(x=>x.email!==c.email); render();
       });
       L.append(row);
@@ -927,7 +993,7 @@ const Admin=(()=>{
   $('altaForm').addEventListener('submit', async e=>{
     e.preventDefault();
     const nombre=$('altaNombre').value.trim().replace(/\s+/g,' '), email=$('altaEmail').value.trim().toLowerCase();
-    $('altaErr').textContent=''; $('altaOk').hidden=true;
+    $('altaErr').textContent='';
     if(!nombre){ $('altaErr').textContent='Escribe el nombre.'; return; }
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ $('altaErr').textContent='Revisa el email.'; return; }
     const b=$('altaBtn'); b.disabled=true; b.textContent='Creando…';
@@ -938,10 +1004,8 @@ const Admin=(()=>{
     $('altaNombre').value=''; $('altaEmail').value='';
     showResult(nombre,email,pass,true); load();
   });
-  $('altaWa').addEventListener('click',()=>{ if(last) window.open('https://wa.me/?text='+encodeURIComponent(last.text),'_blank'); });
-  $('altaCopy').addEventListener('click', async ()=>{ if(!last) return; try{ await navigator.clipboard.writeText(last.text); $('altaCopy').textContent='¡Copiado!'; }catch(e){ prompt('Copia el mensaje:', last.text); } setTimeout(()=>$('altaCopy').textContent='Copiar mensaje',1600); });
   $('cliSearch').addEventListener('input', render);
-  btn.addEventListener('click',()=>{ panel.hidden=false; document.body.classList.add('pk-open'); $('altaOk').hidden=true; load(); });
+  btn.addEventListener('click',()=>{ panel.hidden=false; document.body.classList.add('pk-open'); load(); });
   $('adminClose').addEventListener('click',()=>{ panel.hidden=true; document.body.classList.remove('pk-open'); });
   return { check(email){ const ok=!!email && ADMINS.includes(String(email).toLowerCase()); btn.style.display=ok?'block':'none'; if(!ok) panel.hidden=true; } };
 })();
